@@ -1,22 +1,25 @@
 import { OTPWidget } from '@msg91comm/sendotp-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
+
 import {
-    Alert,
-    Dimensions,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    SafeAreaView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  Dimensions,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  SafeAreaView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View
 } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
@@ -30,6 +33,12 @@ interface UserData {
   dob: string;
 }
 
+// Extend the global object to include refreshAuthState
+declare global {
+  // eslint-disable-next-line no-var
+  var refreshAuthState: (() => void) | undefined;
+}
+
 const LoginScreen = () => {
   const [phoneNumber, setPhoneNumber] = useState<string>('');
   const [otp, setOtp] = useState<string>('');
@@ -41,14 +50,32 @@ const LoginScreen = () => {
   const [currentReqId, setCurrentReqId] = useState<string>('');
   const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [stage, setStage] = useState<"phone" | "otp" | "user">("phone");
   const router = useRouter();
 
   useEffect(() => {
     // Initialize OTP Widget
     console.log('Initializing OTP Widget...');
     OTPWidget.initializeWidget(widgetId, tokenAuth);
+    getLoggedInStatus();
   }, []);
 
+  const getLoggedInStatus = async () => {
+    await AsyncStorage.getItem('isLoggedIn').then(value => {
+      if (value === 'true') {
+        setIsLoggedIn(true);
+      } else {
+        setIsLoggedIn(false);
+      }
+    });
+  }
+
+  useFocusEffect(
+    React.useCallback(() => {
+      getLoggedInStatus();
+    }, [])
+  );
   // Handle date picker
   const onDateChange = (event: any, date?: Date): void => {
     const currentDate = date || selectedDate;
@@ -89,6 +116,7 @@ const LoginScreen = () => {
       if (response && response.message) {
         setCurrentReqId(response.message);
         setIsOTPSent(true);
+        setStage("otp");
         Alert.alert('Success', 'OTP sent successfully!');
       } else {
         Alert.alert('Error', 'Failed to send OTP. Please try again.');
@@ -127,6 +155,7 @@ const LoginScreen = () => {
       
       if (response && response.type === 'success') {
         setIsOTPVerified(true);
+        setStage("user");
         setShowUserDataModal(true);
         Alert.alert('Success', 'OTP verified successfully!');
       } else {
@@ -241,14 +270,13 @@ const LoginScreen = () => {
 
             {/* Login Card */}
             <View style={styles.loginCard}>
-              {!isOTPSent ? (
-                // Phone Number Input
+              {stage === "phone" && (
                 <View style={styles.inputSection}>
                   <Text style={styles.title}>Welcome Back!</Text>
                   <Text style={styles.description}>
                     Enter your mobile number to get started
                   </Text>
-                  
+
                   <View style={styles.inputContainer}>
                     <Text style={styles.countryCode}>+91</Text>
                     <TextInput
@@ -262,21 +290,24 @@ const LoginScreen = () => {
                     />
                   </View>
 
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[
                       styles.button,
-                      phoneNumber.length === 10 && !isLoading ? styles.buttonActive : styles.buttonInactive
+                      phoneNumber.length === 10 && !isLoading
+                        ? styles.buttonActive
+                        : styles.buttonInactive,
                     ]}
                     onPress={handleSendOTP}
                     disabled={phoneNumber.length !== 10 || isLoading}
                   >
                     <Text style={styles.buttonText}>
-                      {isLoading ? 'Sending...' : 'Send OTP'}
+                      {isLoading ? "Sending..." : "Send OTP"}
                     </Text>
                   </TouchableOpacity>
                 </View>
-              ) : (
-                // OTP Input
+              )}
+
+              {stage === "otp" && (
                 <View style={styles.inputSection}>
                   <Text style={styles.title}>Verify OTP</Text>
                   <Text style={styles.description}>
@@ -296,31 +327,88 @@ const LoginScreen = () => {
                     />
                   </View>
 
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[
                       styles.button,
-                      otp.length === 4 && !isLoading ? styles.buttonActive : styles.buttonInactive
+                      otp.length === 4 && !isLoading
+                        ? styles.buttonActive
+                        : styles.buttonInactive,
                     ]}
                     onPress={handleVerifyOTP}
                     disabled={otp.length !== 4 || isLoading}
                   >
                     <Text style={styles.buttonText}>
-                      {isLoading ? 'Verifying...' : 'Verify OTP'}
+                      {isLoading ? "Verifying..." : "Verify OTP"}
                     </Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[styles.button, styles.secondaryButton]}
                     onPress={resetForm}
                     disabled={isLoading}
                   >
-                    <Text style={[styles.buttonText, styles.secondaryButtonText]}>
+                    <Text
+                      style={[styles.buttonText, styles.secondaryButtonText]}
+                    >
                       Change Number
                     </Text>
                   </TouchableOpacity>
                 </View>
               )}
+
+              {stage === "user" && (
+                <View style={styles.inputSection}>
+                  <Text style={styles.title}>Complete Your Profile</Text>
+                  <Text style={styles.description}>
+                    Please provide your details to continue
+                  </Text>
+
+                  <View style={styles.modalInputContainer}>
+                    <Text style={styles.inputLabel}>Username</Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="Enter your username"
+                      placeholderTextColor="#9E9E9E"
+                      value={userData.username}
+                      onChangeText={(text) =>
+                        setUserData({ ...userData, username: text })
+                      }
+                      keyboardType='default'
+                    />
+                  </View>
+
+                  <View style={styles.modalInputContainer}>
+                    <Text style={styles.inputLabel}>Date of Birth</Text>
+                    <TouchableOpacity
+                      style={styles.datePickerButton}
+                      onPress={showDatePickerModal}
+                    >
+                      <Text
+                        style={[
+                          styles.datePickerText,
+                          userData.dob
+                            ? styles.dateSelectedText
+                            : styles.datePlaceholderText,
+                        ]}
+                      >
+                        {formatDateForDisplay(userData.dob)}
+                      </Text>
+                      <Text style={styles.calendarIcon}>📅</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  
+
+                  <TouchableOpacity
+                    style={[styles.button, styles.modalButton]}
+                    onPress={handleUserDataSubmit}
+                  >
+                    <Text style={styles.buttonText}>Continue</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
+
 
             {/* Footer */}
             <Text style={styles.footer}>
@@ -329,71 +417,31 @@ const LoginScreen = () => {
           </View>
         </KeyboardAvoidingView>
       </LinearGradient>
-
-      {/* User Data Modal */}
-      <Modal
-        visible={showUserDataModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowUserDataModal(false)}
-      >
+<Modal
+      visible={showDatePicker}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowDatePicker(false)}
+    >
+      <TouchableWithoutFeedback onPress={() => setShowDatePicker(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Complete Your Profile</Text>
-            <Text style={styles.modalDescription}>
-              Please provide your details to continue
-            </Text>
-
-            <View style={styles.modalInputContainer}>
-              <Text style={styles.inputLabel}>Username</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Enter your username"
-                placeholderTextColor="#9E9E9E"
-                value={userData.username}
-                onChangeText={(text) => setUserData({ ...userData, username: text })}
-              />
-            </View>
-
-            <View style={styles.modalInputContainer}>
-              <Text style={styles.inputLabel}>Date of Birth</Text>
-              <TouchableOpacity 
-                style={styles.datePickerButton}
-                onPress={showDatePickerModal}
-              >
-                <Text style={[
-                  styles.datePickerText,
-                  userData.dob ? styles.dateSelectedText : styles.datePlaceholderText
-                ]}>
-                  {formatDateForDisplay(userData.dob)}
-                </Text>
-                <Text style={styles.calendarIcon}>📅</Text>
-              </TouchableOpacity>
-            </View>
-
-            {showDatePicker && (
+          <TouchableWithoutFeedback>
+            <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 16 }}>
               <DateTimePicker
                 testID="dateTimePicker"
                 value={selectedDate}
                 mode="date"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                display={Platform.OS === "ios" ? "spinner" : "default"}
                 onChange={onDateChange}
-                maximumDate={new Date()} // Can't select future dates
-                minimumDate={new Date(1920, 0, 1)} // Reasonable minimum date
+                maximumDate={new Date()}
+                minimumDate={new Date(1920, 0, 1)}
+                textColor="#000"
               />
-            )}
-
-            <View style={styles.modalButtonContainer}>
-              <TouchableOpacity 
-                style={[styles.button, styles.modalButton]}
-                onPress={handleUserDataSubmit}
-              >
-                <Text style={styles.buttonText}>Continue</Text>
-              </TouchableOpacity>
             </View>
-          </View>
+          </TouchableWithoutFeedback>
         </View>
-      </Modal>
+      </TouchableWithoutFeedback>
+    </Modal>
     </SafeAreaView>
   );
 }
@@ -428,9 +476,9 @@ const styles = StyleSheet.create({
   modalContent: { backgroundColor: 'white', borderRadius: 20, padding: 30, width: '100%', maxWidth: 350, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 10 },
   modalTitle: { fontSize: 22, fontWeight: 'bold', color: '#2E7D32', textAlign: 'center', marginBottom: 8 },
   modalDescription: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 24, lineHeight: 20 },
-  modalInputContainer: { marginBottom: 20 },
+  modalInputContainer: { marginBottom: 20, width: '100%' },
   inputLabel: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 },
-  modalInput: { borderWidth: 2, borderColor: '#E0E0E0', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, backgroundColor: '#F8F8F8', color: '#333' },
+  modalInput: { borderWidth: 2, width:'100%', borderColor: '#E0E0E0', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, backgroundColor: '#F8F8F8', color: '#333' },
   modalButtonContainer: { marginTop: 10 },
   modalButton: { backgroundColor: '#4CAF50' },
   datePickerButton: {
