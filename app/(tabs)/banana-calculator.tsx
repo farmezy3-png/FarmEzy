@@ -1,40 +1,60 @@
+import RadioButton from '@/components/RadioOption';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Print from 'expo-print';
 import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-    Alert,
-    Dimensions,
-    SafeAreaView,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Alert,
+  Dimensions,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
+import { CheckBox } from 'react-native-elements';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
 const { width } = Dimensions.get('window');
 
 interface BananaRow {
   id: string;
-  type: string;
+  bunchcount: string;
   weight: string;
-  pricePerKg: string;
-  amount: number;
+  seconds: boolean
+}
+
+interface first_second_weight {
+  first_weight: {
+    totalBunches: number;
+    weight: number;
+    adjWeight: number;
+    avgWeight: number;
+  };
+  second_weight: {
+    totalBunches: number;
+    weight: number;
+    adjWeight: number;
+    avgWeight: number;
+  }
 }
 
 const BananaCalculator: React.FC = () => {
   const [rows, setRows] = useState<BananaRow[]>([
-    { id: '1', type: '', weight: '', pricePerKg: '', amount: 0 }
+    { id: '1', weight: '', bunchcount: '', seconds: false }
   ]);
   const [billNumber, setBillNumber] = useState<string>('');
   const [farmerName, setFarmerName] = useState<string>('');
   const router = useRouter();
+  const [ratePerKg, setRatePerKg] = useState<number>(0);
+  const [bunchWaste, setBunchWaste] = useState<number>(2.0);
+  const [totalWeights, setTotalWeights] = useState<first_second_weight>()
+  const [totalAmount, setTotalAmount] = useState<number>(0);
 
   // Generate unique bill number
   const generateBillNumber = () => {
@@ -48,6 +68,10 @@ const BananaCalculator: React.FC = () => {
     loadUserData();
     setBillNumber(generateBillNumber());
   }, []);
+
+  useEffect(() => {
+    setTotalAmount(getTotalAmount());
+  }, [ratePerKg])
 
   const loadUserData = async () => {
     try {
@@ -67,15 +91,13 @@ const BananaCalculator: React.FC = () => {
     return weightNum * priceNum;
   };
 
+
   const updateRow = (id: string, field: keyof BananaRow, value: string) => {
     setRows(prevRows => 
       prevRows.map(row => {
         if (row.id === id) {
           const updatedRow = { ...row, [field]: value };
-          // Recalculate amount when weight or price changes
-          if (field === 'weight' || field === 'pricePerKg') {
-            updatedRow.amount = calculateAmount(updatedRow.weight, updatedRow.pricePerKg);
-          }
+          // Recalculate amount when weight or price changes 
           return updatedRow;
         }
         return row;
@@ -83,11 +105,23 @@ const BananaCalculator: React.FC = () => {
     );
   };
 
+  const updateSeconds = (id: string, field: keyof BananaRow, value: boolean) => {
+    setRows(prevRows =>
+      prevRows.map(row => {
+        if (row.id === id) {
+          return { ...row, [field]: value };
+        }
+        return row;
+      })
+    )
+
+  }
+
   const addNewRow = () => {
     const newId = (rows.length + 1).toString();
     setRows(prevRows => [
       ...prevRows,
-      { id: newId, type: '', weight: '', pricePerKg: '', amount: 0 }
+      { id: newId, weight: '', bunchcount: '', seconds: false }
     ]);
   };
 
@@ -99,19 +133,70 @@ const BananaCalculator: React.FC = () => {
     }
   };
 
-  const getTotalAmount = (): number => {
-    return rows.reduce((total, row) => total + row.amount, 0);
-  };
+  const getTotalAmount = useCallback((): number => {
+    if(ratePerKg > 0){
+    let firstWeight = {
+      totalBunches: 0,
+      weight: 0,
+      adjWeight: 0,
+      avgWeight: 0,
+    };
+    let secondWeight = {
+      totalBunches: 0,
+      weight: 0,
+      adjWeight: 0,
+      avgWeight: 0,
+    };
+
+    rows.forEach((row) => {
+      const bunchCount = parseInt(row.bunchcount) || 0;
+      const weight = parseFloat(row.weight) || 0;
+      if (row.seconds) {
+        secondWeight.totalBunches += bunchCount;
+        secondWeight.weight += weight;
+        secondWeight.adjWeight = parseFloat(
+          ((secondWeight.weight - (secondWeight.totalBunches * bunchWaste)) / 2).toFixed(2)
+        );
+        secondWeight.avgWeight = secondWeight.totalBunches > 0
+          ? parseFloat((secondWeight.adjWeight / secondWeight.totalBunches).toFixed(2))
+          : 0;
+      } else {
+        firstWeight.totalBunches += bunchCount;
+        firstWeight.weight += weight;
+        firstWeight.adjWeight = parseFloat(
+          (firstWeight.weight - (firstWeight.totalBunches * bunchWaste)).toFixed(2)
+        );
+        firstWeight.avgWeight = firstWeight.totalBunches > 0
+          ? parseFloat((firstWeight.adjWeight / firstWeight.totalBunches).toFixed(2))
+          : 0;
+      }
+    });
+
+    setTotalWeights({ first_weight: firstWeight, second_weight: secondWeight });
+
+    // Calculate total amount using adjusted weights
+    if (ratePerKg > 0) {
+      const firstAmount = firstWeight.adjWeight * ratePerKg;
+      const secondAmount = secondWeight.adjWeight * ratePerKg * 0.5;
+      return firstAmount + secondAmount;
+    } else {
+      return 0;
+    }
+  }
+  else{  return 0
+  }
+}, [ratePerKg]);
 
   const resetCalculator = () => {
-    setRows([{ id: '1', type: '', weight: '', pricePerKg: '', amount: 0 }]);
+    setRows([{ id: '1', weight: '', bunchcount: '', seconds: false }]);
     setBillNumber(generateBillNumber());
   };
 
   const generateBillHTML = () => {
     const currentDate = new Date().toLocaleDateString('en-IN');
     const currentTime = new Date().toLocaleTimeString('en-IN');
-    const totalWeight = rows.reduce((sum, row) => sum + (parseFloat(row.weight) || 0), 0);
+    const totalWeight = totalWeights?.first_weight.adjWeight || 0;
+    const secondsWeight = totalWeights?.second_weight.adjWeight || 0;
     const totalAmount = getTotalAmount();
 
     return `
@@ -220,6 +305,7 @@ const BananaCalculator: React.FC = () => {
               font-size: 32px;
               font-weight: bold;
               margin: 10px 0;
+              font-color: #000
             }
             .footer {
               text-align: center;
@@ -265,20 +351,18 @@ const BananaCalculator: React.FC = () => {
             <thead>
               <tr>
                 <th>S.No</th>
-                <th>Banana Type</th>
+                <th>Bunch Count</th>
                 <th>Weight (kg)</th>
-                <th>Price per kg (₹)</th>
-                <th>Amount (₹)</th>
+                <th>Seconds</th>
               </tr>
             </thead>
             <tbody>
               ${rows.map((row, index) => `
                 <tr>
                   <td>${index + 1}</td>
-                  <td>${row.type || 'N/A'}</td>
+                  <td>${row.bunchcount || '0'}</td>
                   <td>${row.weight || '0'}</td>
-                  <td>₹${row.pricePerKg || '0'}</td>
-                  <td class="amount-cell">₹${row.amount.toFixed(2)}</td>
+                  <td class="amount-cell">${row.seconds}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -295,14 +379,18 @@ const BananaCalculator: React.FC = () => {
               <span>${totalWeight.toFixed(2)} kg</span>
             </div>
             <div class="summary-row">
+              <span>Seconds Weight:</span>
+              <span>${secondsWeight.toFixed(2)} kg</span>
+            </div>
+            <div class="summary-row">
               <span>Average Price per kg:</span>
-              <span>₹${rows.length > 0 ? (rows.reduce((sum, row) => sum + (parseFloat(row.pricePerKg) || 0), 0) / rows.length).toFixed(2) : '0.00'}</span>
+               <span>₹ ${ratePerKg.toFixed(2)}</span>
             </div>
           </div>
 
           <div class="total-section">
             <h2>Total Amount</h2>
-            <div class="total-amount">₹${totalAmount.toFixed(2)}</div>
+            <div class="total-amount"><strong>₹${totalAmount.toFixed(2)}</strong></div>
             <p>Amount in words: ${numberToWords(totalAmount)} Rupees Only</p>
           </div>
 
@@ -364,7 +452,7 @@ const BananaCalculator: React.FC = () => {
   const generateBill = async () => {
     console.log('Generate Bill button pressed!'); // Debug log
     
-    if (rows.every(row => !row.type && !row.weight && !row.pricePerKg)) {
+    if (rows.every(row => !row.weight && !row.bunchcount)) {
       Alert.alert('Error', 'Please add at least one item to generate the bill');
       return;
     }
@@ -441,10 +529,9 @@ const BananaCalculator: React.FC = () => {
 
         {/* Table Header */}
         <View style={styles.tableHeader}>
-          <Text style={[styles.headerCell, styles.typeHeader]}>Type</Text>
-          <Text style={[styles.headerCell, styles.weightHeader]}>Weight (kg)</Text>
-          <Text style={[styles.headerCell, styles.priceHeader]}>Price/kg (₹)</Text>
-          <Text style={[styles.headerCell, styles.amountHeader]}>Amount (₹)</Text>
+          <Text style={[styles.headerCell, styles.weightHeader]}>Bunch Count</Text>
+          <Text style={[styles.headerCell, styles.priceHeader]}>Weight</Text>
+          <Text style={[styles.headerCell, styles.amountHeader]}>Seconds</Text>
           <View style={styles.actionHeader} />
         </View>
 
@@ -453,19 +540,11 @@ const BananaCalculator: React.FC = () => {
           {rows.map((row, index) => (
             <View key={row.id} style={styles.tableRow}>
               <TextInput
-                style={[styles.input, styles.typeInput]}
-                placeholder="e.g. Robusta"
-                placeholderTextColor="#999"
-                value={row.type}
-                onChangeText={(text) => updateRow(row.id, 'type', text)}
-              />
-              
-              <TextInput
                 style={[styles.input, styles.weightInput]}
                 placeholder="0"
                 placeholderTextColor="#999"
-                value={row.weight}
-                onChangeText={(text) => updateRow(row.id, 'weight', text)}
+                value={row.bunchcount}
+                onChangeText={(text) => updateRow(row.id, 'bunchcount', text)}
                 keyboardType="numeric"
               />
               
@@ -473,15 +552,20 @@ const BananaCalculator: React.FC = () => {
                 style={[styles.input, styles.priceInput]}
                 placeholder="0"
                 placeholderTextColor="#999"
-                value={row.pricePerKg}
-                onChangeText={(text) => updateRow(row.id, 'pricePerKg', text)}
+                value={row.weight}
+                onChangeText={(text) => updateRow(row.id, 'weight', text)}
                 keyboardType="numeric"
               />
               
               <View style={styles.amountCell}>
-                <Text style={styles.amountText}>
-                  ₹{row.amount.toFixed(2)}
-                </Text>
+                <CheckBox
+                  checked={row.seconds}
+                  onPress={() => updateSeconds(row.id, 'seconds', !row.seconds)}
+                  checkedColor="#2E7D32"
+                  uncheckedColor="#BDBDBD"
+                  containerStyle={{ backgroundColor: 'transparent', borderWidth: 0, padding: 0 }}
+                  style={{width: 20, height: 20}}
+                />
               </View>
               
               <TouchableOpacity
@@ -506,17 +590,30 @@ const BananaCalculator: React.FC = () => {
         </TouchableOpacity>
 
         {/* Generate Bill Button - Test Version */}
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.generateBillButton} onPress={generateBill}>
-            <LinearGradient
-              colors={['#2196F3', '#1976D2']}
-              style={styles.generateBillGradient}
-            >
-              <Icon name="picture-as-pdf" size={24} color="white" />
-              <Text style={styles.generateBillText}>Generate PDF Bill</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
+        
+        {
+          rows.length > 0 && rows.some(row => row.weight) &&
+            <View >
+              <View style={styles.ratePerKg}>
+                <Text style={{fontSize:16, fontWeight:'600'}}>Rate Per (Kg):</Text>
+                <TextInput
+                  style={[styles.input, {width:200, marginLeft:10}]}
+                  placeholder="0"
+                  placeholderTextColor="#999"
+                  keyboardType="numeric"
+                  onChange={(text) => {
+                    setRatePerKg(parseFloat(text.nativeEvent.text) || 0)
+                  }}
+                />
+              </View>
+              <View style={styles.ratePerKg}>
+                <Text style={{fontSize:16, fontWeight:'600', marginRight:10}}>Bunch Waste</Text>
+                <RadioButton label={'2.0'} value={2} selected={bunchWaste} onPress={() => setBunchWaste(2.0)}/>
+                <RadioButton label={'2.5'} value={2.5} selected={bunchWaste} onPress={() => setBunchWaste(2.5)}/>
+              </View>
+            </View>
+        }
+       
         <View style={styles.totalCard}>
           <LinearGradient
             colors={['#FFB300', '#FF8F00']}
@@ -524,7 +621,7 @@ const BananaCalculator: React.FC = () => {
           >
             <View style={styles.totalContent}>
               <Text style={styles.totalLabel}>Total Amount</Text>
-              <Text style={styles.totalAmount}>₹{getTotalAmount().toFixed(2)}</Text>
+              <Text style={styles.totalAmount}>₹{totalAmount.toFixed(2)}</Text>
             </View>
           </LinearGradient>
         </View>
@@ -547,19 +644,40 @@ const BananaCalculator: React.FC = () => {
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Total Weight:</Text>
             <Text style={styles.summaryValue}>
-              {rows.reduce((sum, row) => sum + (parseFloat(row.weight) || 0), 0).toFixed(2)} kg
+              {
+                totalWeights ? totalWeights.first_weight.adjWeight : 0
+              } kg             
+            </Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Seconds Weight:</Text>
+            <Text style={styles.summaryValue}>
+              {
+                totalWeights ? totalWeights.second_weight.adjWeight : 0
+              } kg             
             </Text>
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Average Price/kg:</Text>
-            <Text style={styles.summaryValue}>
+            {/* <Text style={styles.summaryValue}>
               ₹{rows.length > 0 ? 
                 (rows.reduce((sum, row) => sum + (parseFloat(row.pricePerKg) || 0), 0) / rows.length).toFixed(2) 
                 : '0.00'}
-            </Text>
+            </Text> */}
           </View>
         </View>
-
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity style={styles.generateBillButton} onPress={generateBill}>
+            <LinearGradient
+              colors={['#2196F3', '#1976D2']}
+              style={styles.generateBillGradient}
+            >
+              <Icon name="picture-as-pdf" size={24} color="white" />
+              <Text style={styles.generateBillText}>Generate PDF Bill</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+  
         <View style={styles.bottomPadding} />
       </ScrollView>
     </SafeAreaView>
@@ -656,7 +774,7 @@ const styles = StyleSheet.create({
     flex: 2,
   },
   amountHeader: {
-    flex: 2.5,
+    flex: 2,
   },
   actionHeader: {
     width: 40,
@@ -703,13 +821,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 2,
   },
   amountCell: {
-    flex: 2.5,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    backgroundColor: '#E8F5E8',
-    borderRadius: 6,
-    marginLeft: 2,
-    marginRight: 4,
+    flex: 2,
+    textAlign: 'center',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   amountText: {
     fontSize: 14,
@@ -828,6 +943,14 @@ const styles = StyleSheet.create({
   bottomPadding: {
     height: 20,
   },
+  ratePerKg: {
+    justifyContent:'space-between',
+    marginBottom:20,
+    display: 'flex',
+    alignItems: 'center',
+    flexDirection: 'row',
+    width:"50%"
+  }
 });
 
 export default BananaCalculator;
