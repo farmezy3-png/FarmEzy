@@ -9,6 +9,7 @@ const bananaWeightsCollection = collection(db, 'bananaWeights');
  * @returns 
  */
 export const manageUserDetails = async (data) => {
+  console.log('Saving user details:', data);
   const docRef = await addDoc(collection(db, 'userdetails'), {
     data,
     createdAt: new Date(),

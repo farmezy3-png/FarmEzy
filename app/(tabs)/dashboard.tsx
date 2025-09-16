@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   Dimensions,
@@ -394,6 +394,22 @@ const Dashboard = () => {
               >
                 <Text style={styles.bananaIcon}>🍌</Text>
                 <Text style={styles.actionText}>Banana Calculator</Text>
+              </LinearGradient>
+              </TouchableOpacity>
+          </View>
+          <View style={[styles.quickActions, {marginTop: 12}]}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => {
+                console.log('Navigating to Weather Details...');
+              }}
+            >
+              <LinearGradient
+                colors={['#FFB300', '#FF8F00']}
+                style={styles.actionGradient}
+              >
+                <Icon name="receipt" size={32} color="white" />
+                <Text style={styles.actionText}>My Bills</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>

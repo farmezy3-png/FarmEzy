@@ -1,9 +1,9 @@
 // repositories/BananaWeightRepository.js
 
 import {
-    fetchBananaWeightDetails,
-    fetchBananaWeightsByMobile,
-    manageBananaWeightDetails
+  fetchBananaWeightDetails,
+  fetchBananaWeightsByMobile,
+  manageBananaWeightDetails
 } from '../services/firestore';
 
 class BananaWeightRepository {
@@ -12,7 +12,7 @@ class BananaWeightRepository {
    * @param {Object} data
    * @returns {Promise<string>} - Firestore document ID
    */
-  async save(data) {
+  async save(data : any): Promise<any> {
     return await manageBananaWeightDetails(data);
   }
 
@@ -20,7 +20,7 @@ class BananaWeightRepository {
    * Get all banana weight records
    * @returns {Promise<Array>}
    */
-  async getAll() {
+  async getAll(): Promise<Array<any>> {
     return await fetchBananaWeightDetails();
   } 
 
@@ -29,7 +29,7 @@ class BananaWeightRepository {
    * @param {string} contactNumber
    * @returns {Promise<Array>}
    */
-  async getByContactNumber(contactNumber) {
+  async getByContactNumber(contactNumber : any): Promise<Array<any>> {
     return await fetchBananaWeightsByMobile(contactNumber);
   }  
 

@@ -5,7 +5,7 @@ import * as Print from 'expo-print';
 import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import * as React from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   Dimensions,
@@ -47,7 +47,7 @@ interface first_second_weight {
 
 const BananaCalculator: React.FC = () => {
   const [rows, setRows] = useState<BananaRow[]>([
-    { id: '1', weight: '', bunchcount: '', seconds: false }
+    { id: '1', weight: '' , bunchcount: '', seconds: false }
   ]);
   const [billNumber, setBillNumber] = useState<string>('');
   const [farmerName, setFarmerName] = useState<string>('');
@@ -74,6 +74,13 @@ const BananaCalculator: React.FC = () => {
     setTotalAmount(getTotalAmount());
   }, [ratePerKg])
 
+  useEffect(() => {
+    if (rows.length > 0 && rows.some(row => row.weight != '')){
+        calculateWeights();
+        setTotalAmount(getTotalAmount());
+    }
+  }, [rows, bunchWaste]);
+
   const loadUserData = async () => {
     try {
       const userData = await AsyncStorage.getItem('userData');
@@ -84,12 +91,6 @@ const BananaCalculator: React.FC = () => {
     } catch (error) {
       console.error('Error loading user data:', error);
     }
-  };
-
-  const calculateAmount = (weight: string, pricePerKg: string): number => {
-    const weightNum = parseFloat(weight) || 0;
-    const priceNum = parseFloat(pricePerKg) || 0;
-    return weightNum * priceNum;
   };
 
 
@@ -105,6 +106,47 @@ const BananaCalculator: React.FC = () => {
       })
     );
   };
+
+
+  const calculateWeights = () => {
+    let firstWeight = {
+      totalBunches: 0,
+      weight: 0,
+      adjWeight: 0,
+      avgWeight: 0,
+    };
+    let secondWeight = {
+      totalBunches: 0,
+      weight: 0,
+      adjWeight: 0,
+      avgWeight: 0,
+    };
+    rows.forEach((row) => {
+      const bunchCount = parseInt(row.bunchcount) || 0;
+      const weight = parseFloat(row.weight) || 0;
+      if (row.seconds) {
+        secondWeight.totalBunches += bunchCount;
+        secondWeight.weight += weight;
+        secondWeight.adjWeight = parseFloat(
+          ((secondWeight.weight - (secondWeight.totalBunches * bunchWaste)) / 2).toFixed(2)
+        );
+        secondWeight.avgWeight = secondWeight.totalBunches > 0
+          ? parseFloat((secondWeight.adjWeight / secondWeight.totalBunches).toFixed(2))
+          : 0;
+      } else {
+        firstWeight.totalBunches += bunchCount;
+        firstWeight.weight += weight;
+        firstWeight.adjWeight = parseFloat(
+          (firstWeight.weight - (firstWeight.totalBunches * bunchWaste)).toFixed(2)
+        );
+        firstWeight.avgWeight = firstWeight.totalBunches > 0
+          ? parseFloat((firstWeight.adjWeight / firstWeight.totalBunches).toFixed(2))
+          : 0;
+      }
+    });
+
+    setTotalWeights({ first_weight: firstWeight, second_weight: secondWeight });
+  }
 
   const updateSeconds = (id: string, field: keyof BananaRow, value: boolean) => {
     setRows(prevRows =>
@@ -134,59 +176,16 @@ const BananaCalculator: React.FC = () => {
     }
   };
 
-  const getTotalAmount = useCallback((): number => {
-    if(ratePerKg > 0){
-    let firstWeight = {
-      totalBunches: 0,
-      weight: 0,
-      adjWeight: 0,
-      avgWeight: 0,
-    };
-    let secondWeight = {
-      totalBunches: 0,
-      weight: 0,
-      adjWeight: 0,
-      avgWeight: 0,
-    };
-
-    rows.forEach((row) => {
-      const bunchCount = parseInt(row.bunchcount) || 0;
-      const weight = parseFloat(row.weight) || 0;
-      if (row.seconds) {
-        secondWeight.totalBunches += bunchCount;
-        secondWeight.weight += weight;
-        secondWeight.adjWeight = parseFloat(
-          ((secondWeight.weight - (secondWeight.totalBunches * bunchWaste)) / 2).toFixed(2)
-        );
-        secondWeight.avgWeight = secondWeight.totalBunches > 0
-          ? parseFloat((secondWeight.adjWeight / secondWeight.totalBunches).toFixed(2))
-          : 0;
-      } else {
-        firstWeight.totalBunches += bunchCount;
-        firstWeight.weight += weight;
-        firstWeight.adjWeight = parseFloat(
-          (firstWeight.weight - (firstWeight.totalBunches * bunchWaste)).toFixed(2)
-        );
-        firstWeight.avgWeight = firstWeight.totalBunches > 0
-          ? parseFloat((firstWeight.adjWeight / firstWeight.totalBunches).toFixed(2))
-          : 0;
-      }
-    });
-
-    setTotalWeights({ first_weight: firstWeight, second_weight: secondWeight });
-
+  const getTotalAmount = (): number => {
     // Calculate total amount using adjusted weights
     if (ratePerKg > 0) {
-      const firstAmount = firstWeight.adjWeight * ratePerKg;
-      const secondAmount = secondWeight.adjWeight * ratePerKg * 0.5;
+      const firstAmount = (totalWeights?.first_weight.adjWeight ?? 0) * ratePerKg;
+      const secondAmount = (totalWeights?.second_weight.adjWeight ?? 0) * ratePerKg * 0.5;
       return firstAmount + secondAmount;
     } else {
       return 0;
     }
-  }
-  else{  return 0
-  }
-}, [ratePerKg]);
+};
 
   const resetCalculator = () => {
     setRows([{ id: '1', weight: '', bunchcount: '', seconds: false }]);
@@ -354,7 +353,7 @@ const BananaCalculator: React.FC = () => {
                 <th>S.No</th>
                 <th>Bunch Count</th>
                 <th>Weight (kg)</th>
-                <th>Seconds</th>
+                <th>Quality</th>
               </tr>
             </thead>
             <tbody>
@@ -363,7 +362,9 @@ const BananaCalculator: React.FC = () => {
                   <td>${index + 1}</td>
                   <td>${row.bunchcount || '0'}</td>
                   <td>${row.weight || '0'}</td>
-                  <td class="amount-cell">${row.seconds}</td>
+                  <td class="amount-cell">
+                    ${row.seconds ? 'Seconds Quality' : 'First Quality'}
+                  </td>
                 </tr>
               `).join('')}
             </tbody>
@@ -376,11 +377,11 @@ const BananaCalculator: React.FC = () => {
               <span>${rows.length}</span>
             </div>
             <div class="summary-row">
-              <span>Total Weight:</span>
+              <span>First Quality Weight:</span>
               <span>${totalWeight.toFixed(2)} kg</span>
             </div>
             <div class="summary-row">
-              <span>Seconds Weight:</span>
+              <span>Seconds Quality Weight:</span>
               <span>${secondsWeight.toFixed(2)} kg</span>
             </div>
             <div class="summary-row">
@@ -532,7 +533,7 @@ const BananaCalculator: React.FC = () => {
         <View style={styles.tableHeader}>
           <Text style={[styles.headerCell, styles.weightHeader]}>Bunch Count</Text>
           <Text style={[styles.headerCell, styles.priceHeader]}>Weight</Text>
-          <Text style={[styles.headerCell, styles.amountHeader]}>Seconds</Text>
+          <Text style={[styles.headerCell, styles.amountHeader]}>Second Quality</Text>
           <View style={styles.actionHeader} />
         </View>
 
@@ -592,7 +593,27 @@ const BananaCalculator: React.FC = () => {
 
         {/* Generate Bill Button - Test Version */}
         
+       
+
         {
+          totalWeights && 
+          <View style={styles.weightSummary}>
+            <View>
+              <Text style={{fontSize:16, fontWeight:'600', marginBottom:10}}>Weights Summary:</Text>
+              { 
+                <View style={{display:'flex', marginBottom:10, flexDirection:'row', justifyContent:'space-between', width:"80%"}}>
+                  <Text>First Quality Weight: {totalWeights.first_weight.weight} kg</Text>
+                </View>
+              }
+              {
+                <View style={{display:'flex', flexDirection:'row', justifyContent:'space-between', width:"80%"}}>
+                  <Text>Second Quality Weight: {totalWeights.second_weight.weight} kg</Text>
+                </View>
+              }
+            </View>
+          </View>
+        }
+         {
           rows.length > 0 && rows.some(row => row.weight) &&
             <View >
               <View style={styles.ratePerKg}>
@@ -627,7 +648,6 @@ const BananaCalculator: React.FC = () => {
           </LinearGradient>
         </View>
 
-        {/* Summary Card */}
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>Bill Preview</Text>
           <View style={styles.summaryRow}>
@@ -643,7 +663,7 @@ const BananaCalculator: React.FC = () => {
             <Text style={styles.summaryValue}>{rows.length}</Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Total Weight:</Text>
+            <Text style={styles.summaryLabel}>First Quality Weight:</Text>
             <Text style={styles.summaryValue}>
               {
                 totalWeights ? totalWeights.first_weight.adjWeight : 0
@@ -651,7 +671,7 @@ const BananaCalculator: React.FC = () => {
             </Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Seconds Weight:</Text>
+            <Text style={styles.summaryLabel}>Second Quality Weight:</Text>
             <Text style={styles.summaryValue}>
               {
                 totalWeights ? totalWeights.second_weight.adjWeight : 0
@@ -667,6 +687,9 @@ const BananaCalculator: React.FC = () => {
             </Text> */}
           </View>
         </View>
+
+        {/* Summary Card */}
+        
         <View style={styles.buttonContainer}>
           <TouchableOpacity style={styles.generateBillButton} onPress={generateBill}>
             <LinearGradient
@@ -951,6 +974,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     width:"50%"
+  },
+  weightSummary: {
+    fontSize: 16,
+    color: '#333',
+    marginBottom: 10,
+    marginTop:10,
+    fontWeight: '500',
+    borderTopWidth:1,
+    borderTopColor:'#E0E0E0',
+    paddingTop:16,
+    borderBottomWidth:1,
+    borderBottomColor:'#E0E0E0',
+    paddingBottom:16
   }
 });
 

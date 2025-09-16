@@ -5,6 +5,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
+import UserRepository from '../../repositories/userrepository';
 
 import {
   Alert,
@@ -31,6 +32,7 @@ const tokenAuth = '465493TgY9Xc3szGfj68a82daeP1'; // Replace with your actual au
 interface UserData {
   username: string;
   dob: string;
+  phonenumber?: string;
 }
 
 // Extend the global object to include refreshAuthState
@@ -45,7 +47,7 @@ const LoginScreen = () => {
   const [isOTPSent, setIsOTPSent] = useState<boolean>(false);
   const [isOTPVerified, setIsOTPVerified] = useState<boolean>(false);
   const [showUserDataModal, setShowUserDataModal] = useState<boolean>(false);
-  const [userData, setUserData] = useState<UserData>({ username: '', dob: '' });
+  const [userData, setUserData] = useState<UserData>({ username: '', dob: '', phonenumber: phoneNumber });
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [currentReqId, setCurrentReqId] = useState<string>('');
   const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
@@ -56,7 +58,6 @@ const LoginScreen = () => {
 
   useEffect(() => {
     // Initialize OTP Widget
-    console.log('Initializing OTP Widget...');
     OTPWidget.initializeWidget(widgetId, tokenAuth);
     getLoggedInStatus();
   }, []);
@@ -97,7 +98,6 @@ const LoginScreen = () => {
   };
 
   const handleSendOTP = async (): Promise<void> => {
-    console.log('Sending OTP for:', phoneNumber);
     
     if (phoneNumber.length !== 10) {
       Alert.alert('Error', 'Please enter a valid 10-digit phone number');
@@ -111,7 +111,6 @@ const LoginScreen = () => {
       };
       
       const response = await OTPWidget.sendOTP(data);
-      console.log('OTP Response:', response);
       
       if (response && response.message) {
         setCurrentReqId(response.message);
@@ -122,7 +121,6 @@ const LoginScreen = () => {
         Alert.alert('Error', 'Failed to send OTP. Please try again.');
       }
     } catch (error) {
-      console.error('OTP Send Error:', error);
       Alert.alert('Error', 'Failed to send OTP. Please check your connection.');
     } finally {
       setIsLoading(false);
@@ -130,7 +128,6 @@ const LoginScreen = () => {
   };
 
   const handleVerifyOTP = async (): Promise<void> => {
-    console.log('Verifying OTP:', otp);
     
     if (otp.length !== 4) {
       Alert.alert('Error', 'Please enter a valid 4-digit OTP');
@@ -151,7 +148,6 @@ const LoginScreen = () => {
       };
       
       const response = await OTPWidget.verifyOTP(data);
-      console.log('Verify Response:', response);
       
       if (response && response.type === 'success') {
         setIsOTPVerified(true);
@@ -162,7 +158,6 @@ const LoginScreen = () => {
         Alert.alert('Error', 'Invalid OTP. Please try again.');
       }
     } catch (error) {
-      console.error('OTP Verify Error:', error);
       Alert.alert('Error', 'Failed to verify OTP. Please try again.');
     } finally {
       setIsLoading(false);
@@ -170,7 +165,6 @@ const LoginScreen = () => {
   };
 
   const handleUserDataSubmit = async (): Promise<void> => {
-    console.log('Submitting user data:', userData);
     
     if (userData.username.trim() && userData.dob.trim()) {
       try {
@@ -178,26 +172,21 @@ const LoginScreen = () => {
         await AsyncStorage.setItem('userData', JSON.stringify(userData));
         await AsyncStorage.setItem('isLoggedIn', 'true');
         
-        console.log('User data stored successfully');
-        console.log('Stored data check:', {
-          userData: await AsyncStorage.getItem('userData'),
-          isLoggedIn: await AsyncStorage.getItem('isLoggedIn')
-        });
-        
         setShowUserDataModal(false);
+
+        console.log('User data to be saved:', userData);
+
+        UserRepository.saveuser(userData);
+        
+        console.log(UserRepository.getUser());
         
         // Trigger auth state refresh
         if (global.refreshAuthState) {
-          console.log('Refreshing auth state...');
           global.refreshAuthState();
         }
-        
-        // Force navigation with replace
-        console.log('Navigating to dashboard...');
         router.replace('/(tabs)/dashboard');
         
       } catch (error) {
-        console.error('Error storing user data:', error);
         Alert.alert('Error', 'Failed to save user data. Please try again.');
       }
     } else {
@@ -212,15 +201,8 @@ const LoginScreen = () => {
       await AsyncStorage.setItem('userData', JSON.stringify(debugUserData));
       await AsyncStorage.setItem('isLoggedIn', 'true');
       
-      console.log('Debug login successful');
-      console.log('Debug stored data:', {
-        userData: await AsyncStorage.getItem('userData'),
-        isLoggedIn: await AsyncStorage.getItem('isLoggedIn')
-      });
-      
       // Trigger auth state refresh
       if (global.refreshAuthState) {
-        console.log('Refreshing auth state from debug login...');
         global.refreshAuthState();
       }
       

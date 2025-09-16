@@ -1,13 +1,14 @@
 import {
-    fetchUserDetails,
-    manageUserDetails
+  fetchUserDetails,
+  manageUserDetails
 } from '../services/firestore';
 
 class UserRepository {
   /**
    * Save user details
    */
-  async saveuser(data) {
+  async saveuser(data : any) {
+    console.log('Saving user details in saveuser:', data);
     return await manageUserDetails(data);
   }
 
